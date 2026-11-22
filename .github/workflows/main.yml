@@ -7,6 +7,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ReelsCounter/ReelsCounter
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -25,5 +28,5 @@ jobs:
         with:
           tag_name: build-${{ github.run_number }}
           name: Reels Counter (build ${{ github.run_number }})
-          files: ReelsCounter.apk
+          files: ReelsCounter/ReelsCounter/ReelsCounter.apk
           make_latest: true
