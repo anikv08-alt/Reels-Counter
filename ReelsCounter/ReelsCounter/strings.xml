@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Reels Counter</string>
+    <string name="a11y_desc">Counts how many Instagram reels you scroll past and watch, and shows a small counter bubble on your screen. It only looks at Instagram\'s screen layout to notice reel swipes. Nothing is read from your messages, and all numbers stay on your phone.</string>
+    <color name="ic_bg">#7A1F3D</color>
+</resources>
