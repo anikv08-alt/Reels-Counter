@@ -7,12 +7,13 @@ import android.graphics.RectF;
 import android.util.TypedValue;
 import android.view.View;
 
-/** Simple bar chart: one bar per day, the last bar (today) highlighted. */
+/** Simple bar chart with one highlighted bar (gold). */
 public class ChartView extends View {
 
     private int[] values = new int[0];
     private String[] labels = new String[0];
     private boolean showValues = true;
+    private int highlight = -1;
 
     private final Paint barPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint todayPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -30,7 +31,8 @@ public class ChartView extends View {
         textPaint.setTextSize(px(TypedValue.COMPLEX_UNIT_SP, 11));
     }
 
-    void setData(int[] values, String[] labels, boolean showValues) {
+    void setData(int[] values, String[] labels, boolean showValues, int highlight) {
+        this.highlight = highlight;
         this.values = values;
         this.labels = labels;
         this.showValues = showValues;
@@ -67,7 +69,7 @@ public class ChartView extends View {
             } else {
                 barHeight = Math.max(barHeight, px(TypedValue.COMPLEX_UNIT_DIP, 3));
                 rect.set(cx - barWidth / 2f, bottom - barHeight, cx + barWidth / 2f, bottom);
-                canvas.drawRoundRect(rect, radius, radius, i == n - 1 ? todayPaint : barPaint);
+                canvas.drawRoundRect(rect, radius, radius, i == highlight ? todayPaint : barPaint);
                 if (showValues) {
                     canvas.drawText(String.valueOf(values[i]), cx, bottom - barHeight - px(TypedValue.COMPLEX_UNIT_DIP, 4), textPaint);
                 }

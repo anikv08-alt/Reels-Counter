@@ -10,6 +10,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.util.TypedValue;
@@ -17,6 +18,8 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
@@ -25,6 +28,7 @@ import android.widget.Toast;
 
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.List;
 import java.util.Locale;
 
 /** The app screen: on/off status, today / week / month / all-time stats, charts and settings. */
@@ -42,6 +46,7 @@ public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private Stats stats;
     private LinearLayout content;
+    private static final int PICK_PHOTOS = 7;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -113,6 +118,34 @@ public class MainActivity extends Activity {
         }
         content.addView(todayCard);
 
+        // ---- when do you scroll most ----
+        LinearLayout hoursCard = card();
+        hoursCard.addView(label("WHEN YOU SCROLL MOST"));
+        int[] hours7 = stats.hourly(Stats.daysAgo(6), today);
+        int[] hoursToday = stats.hourly(today, today);
+        int peak7 = Stats.peak(hours7);
+        int peakToday = Stats.peak(hoursToday);
+        if (peak7 < 0) {
+            hoursCard.addView(text("Not enough data yet. This fills in as you scroll (it started tracking hours with this update).", 14, MUTED, false));
+        } else {
+            int total7 = 0;
+            for (int v : hours7) total7 += v;
+            hoursCard.addView(text(Prefs.hourRange(peak7), 26, Color.WHITE, true));
+            hoursCard.addView(text("your busiest hour over the last 7 days ("
+                    + Math.round(hours7[peak7] * 100f / Math.max(1, total7)) + "% of your reels)", 13, MUTED, false));
+            if (peakToday >= 0) {
+                hoursCard.addView(text("Today so far: most around " + Prefs.hourRange(peakToday), 13, MUTED, false));
+            }
+            ChartView hourChart = new ChartView(this);
+            String[] hourLabels = new String[24];
+            for (int h = 0; h < 24; h++) {
+                hourLabels[h] = h == 0 ? "12a" : h == 6 ? "6a" : h == 12 ? "12p" : h == 18 ? "6p" : "";
+            }
+            hourChart.setData(hours7, hourLabels, false, peak7);
+            hoursCard.addView(hourChart);
+        }
+        content.addView(hoursCard);
+
         // ---- last 7 days chart ----
         LinearLayout weekChart = card();
         weekChart.addView(label("LAST 7 DAYS"));
@@ -124,12 +157,16 @@ public class MainActivity extends Activity {
             c.add(Calendar.DAY_OF_YEAR, -(6 - i));
             labels7[i] = i == 6 ? "Today" : dayName.format(c.getTime());
         }
-        chart7.setData(stats.lastDays(7), labels7, true);
+        chart7.setData(stats.lastDays(7), labels7, true, 6);
         weekChart.addView(chart7);
         content.addView(weekChart);
 
         // ---- week / month / all time ----
-        content.addView(period("THIS WEEK (MON–SUN)", Stats.weekStart(), today, Stats.dayOfWeek()));
+        LinearLayout weekCard = period("THIS WEEK (MON–SUN)", Stats.weekStart(), today, Stats.dayOfWeek());
+        int[] w = stats.weekComparison();
+        weekCard.addView(text(Prefs.weekDiff(w[0], w[1]), 14, w[0] > w[1] ? RED : w[0] < w[1] ? GREEN : MUTED, false));
+        weekCard.addView(text("Last week in total: " + w[2] + " reels", 13, MUTED, false));
+        content.addView(weekCard);
 
         LinearLayout monthCard = period("THIS MONTH", Stats.monthStart(), today, Stats.dayOfMonth());
         monthCard.addView(text("Last 30 days", 13, MUTED, true));
@@ -145,7 +182,7 @@ public class MainActivity extends Activity {
                 labels30[i] = "";
             }
         }
-        chart30.setData(stats.lastDays(30), labels30, false);
+        chart30.setData(stats.lastDays(30), labels30, false, 29);
         monthCard.addView(chart30);
         content.addView(monthCard);
 
@@ -166,6 +203,35 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "Bubble moved back to the top left", Toast.LENGTH_SHORT).show();
         }));
         content.addView(settings);
+
+        // ---- break screen ----
+        LinearLayout breakCard = card();
+        breakCard.addView(label("BREAK SCREEN"));
+        breakCard.addView(text("When you hit your daily limit, Reels Counter opens over Instagram with your photos, "
+                + "a reminder and your week-vs-last-week numbers, and asks if you really want to keep going. "
+                + "It comes back every 10 reels after that.", 14, MUTED, false));
+        if (limit == 0) breakCard.addView(text("Set a daily limit above to turn this on.", 13, GOLD, false));
+        breakCard.addView(toggle("Show the break screen at my limit", "breakScreen", Prefs.breakScreen(prefs)));
+        List<Uri> photos = Images.list(prefs);
+        breakCard.addView(text(photos.isEmpty() ? "No photos yet. Add things you care about: your goals, people, places."
+                : "Your photos (" + photos.size() + ") · tap one to remove it", 13, Color.WHITE, false));
+        if (!photos.isEmpty()) {
+            HorizontalScrollView strip = new HorizontalScrollView(this);
+            strip.setHorizontalScrollBarEnabled(false);
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setPadding(0, dp(8), 0, dp(4));
+            for (Uri uri : photos) row.addView(thumbnail(uri));
+            strip.addView(row);
+            breakCard.addView(strip);
+        }
+        breakCard.addView(button(photos.size() >= Images.MAX ? "Photo limit reached (" + Images.MAX + ")" : "Add photos", v -> pickPhotos()));
+        breakCard.addView(button("Preview the break screen", v -> {
+            Intent i = new Intent(this, LimitActivity.class);
+            i.putExtra(LimitActivity.EXTRA_PREVIEW, true);
+            startActivity(i);
+        }));
+        content.addView(breakCard);
 
         // ---- help ----
         LinearLayout help = card();
@@ -271,6 +337,82 @@ public class MainActivity extends Activity {
                 })
                 .setNegativeButton("Close", null)
                 .show();
+    }
+
+    private ImageView thumbnail(Uri uri) {
+        ImageView iv = new ImageView(this);
+        iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xFF34323A);
+        bg.setCornerRadius(dp(12));
+        iv.setBackground(bg);
+        iv.setClipToOutline(true);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(84), dp(84));
+        lp.rightMargin = dp(8);
+        iv.setLayoutParams(lp);
+        int px = dp(160);
+        new Thread(() -> {
+            Bitmap bmp = Images.load(this, uri, px);
+            runOnUiThread(() -> {
+                if (bmp != null) iv.setImageBitmap(bmp);
+            });
+        }).start();
+        iv.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("Remove this photo?")
+                .setMessage("It will be removed from the break screen. The photo itself stays in your gallery.")
+                .setPositiveButton("Remove", (d, which) -> {
+                    List<Uri> list = Images.list(prefs);
+                    list.remove(uri);
+                    Images.save(prefs, list);
+                    try {
+                        getContentResolver().releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    } catch (Exception ignored) {
+                    }
+                    build();
+                })
+                .setNegativeButton("Keep", null)
+                .show());
+        return iv;
+    }
+
+    private void pickPhotos() {
+        if (Images.list(prefs).size() >= Images.MAX) {
+            Toast.makeText(this, "You can have up to " + Images.MAX + " photos. Remove one first.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("image/*");
+        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        try {
+            startActivityForResult(i, PICK_PHOTOS);
+        } catch (Exception e) {
+            Toast.makeText(this, "Couldn't open your photos", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != PICK_PHOTOS || resultCode != RESULT_OK || data == null) return;
+        List<Uri> list = Images.list(prefs);
+        ClipData clip = data.getClipData();
+        if (clip != null) {
+            for (int i = 0; i < clip.getItemCount(); i++) addPhoto(list, clip.getItemAt(i).getUri());
+        } else if (data.getData() != null) {
+            addPhoto(list, data.getData());
+        }
+        Images.save(prefs, list);
+        build();
+    }
+
+    private void addPhoto(List<Uri> list, Uri uri) {
+        if (uri == null || list.contains(uri) || list.size() >= Images.MAX) return;
+        try {
+            getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (Exception ignored) {
+        }
+        list.add(uri);
     }
 
     private boolean isServiceOn() {

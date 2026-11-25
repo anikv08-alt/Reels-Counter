@@ -14,6 +14,30 @@ final class Prefs {
 
     static boolean onlyInInstagram(SharedPreferences p) { return p.getBoolean("onlyIg", true); }
 
+    static boolean breakScreen(SharedPreferences p) { return p.getBoolean("breakScreen", true); }
+
+    static String hourName(int h) {
+        if (h == 0) return "12 AM";
+        if (h < 12) return h + " AM";
+        if (h == 12) return "12 PM";
+        return (h - 12) + " PM";
+    }
+
+    static String hourRange(int h) {
+        return hourName(h) + " – " + hourName((h + 1) % 24);
+    }
+
+    /** "↑ 70 more reels than at this point last week (+28%)" and similar. */
+    static String weekDiff(int now, int before) {
+        if (now == 0 && before == 0) return "No reels this week or at this point last week.";
+        if (before == 0) return "↑ " + now + " reels this week. Last week you had none by this point.";
+        int diff = now - before;
+        int pct = Math.round(Math.abs(diff) * 100f / before);
+        if (diff > 0) return "↑ " + diff + " more reels than at this point last week (+" + pct + "%)";
+        if (diff < 0) return "↓ " + (-diff) + " fewer reels than at this point last week (−" + pct + "%)";
+        return "Exactly the same as at this point last week";
+    }
+
     static String time(int seconds) {
         if (seconds < 60) return seconds + "s";
         int minutes = seconds / 60;

@@ -18,6 +18,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".LimitActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.reelscounter.breakscreen" />
+
         <service
             android:name=".ReelsAccessibilityService"
             android:exported="true"

@@ -1,6 +1,7 @@
 package com.reelscounter;
 
 import android.accessibilityservice.AccessibilityService;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
@@ -166,8 +167,14 @@ public class ReelsAccessibilityService extends AccessibilityService {
         int type = event.getEventType();
 
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            if (INSTAGRAM.equals(pkg)) setInInstagram(true);
-            else if (!isIgnorable(pkg)) setInInstagram(false);
+            if (INSTAGRAM.equals(pkg)) {
+                setInInstagram(true);
+            } else if (pkg.equals(getPackageName())) {
+                CharSequence cls = event.getClassName();
+                if (cls != null && cls.toString().endsWith("Activity")) setInInstagram(false);
+            } else if (!isIgnorable(pkg)) {
+                setInInstagram(false);
+            }
             return;
         }
         if (type != AccessibilityEvent.TYPE_VIEW_SCROLLED || !INSTAGRAM.equals(pkg)) return;
@@ -295,7 +302,7 @@ public class ReelsAccessibilityService extends AccessibilityService {
             if (reelStartedAt > 0 && !reelCreditedAsWatched
                     && now - reelStartedAt >= Prefs.threshold(prefs) * 1000L) {
                 reelCreditedAsWatched = true;
-                stats.add(Stats.today(), 0, 1, 0);
+                stats.record(0, 1, 0);
             }
             if (pendingSeconds >= 10) flushSeconds();
         }
@@ -310,8 +317,7 @@ public class ReelsAccessibilityService extends AccessibilityService {
     }
 
     private boolean isIgnorable(String pkg) {
-        return pkg.equals(getPackageName())
-                || pkg.equals("com.android.systemui")
+        return pkg.equals("com.android.systemui")
                 || pkg.contains("inputmethod")
                 || pkg.contains("honeyboard")
                 || pkg.contains("keyboard")
@@ -344,25 +350,40 @@ public class ReelsAccessibilityService extends AccessibilityService {
         reelStartedAt = now;
         reelCreditedAsWatched = false;
         String today = Stats.today();
-        stats.add(today, 1, 0, 0);
+        stats.record(1, 0, 0);
         int scrolled = stats.day(today)[0];
         int limit = Prefs.limit(prefs);
-        if (limit > 0 && scrolled >= limit && (scrolled - limit) % 10 == 0) warnLimit(scrolled, limit);
+        if (limit > 0 && scrolled >= limit && (scrolled - limit) % 10 == 0) onLimit(scrolled, limit);
         refreshBubble();
     }
 
     private void flushSeconds() {
         if (pendingSeconds > 0) {
-            stats.add(Stats.today(), 0, 0, pendingSeconds);
+            stats.record(0, 0, pendingSeconds);
             pendingSeconds = 0;
         }
     }
 
-    private void warnLimit(int scrolled, int limit) {
-        String msg = scrolled == limit
-                ? "You just hit your daily limit of " + limit + " reels. Time for a break?"
-                : scrolled + " reels today. That's " + (scrolled - limit) + " over your limit.";
-        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+    /** Runs when you reach your limit, and again every 10 reels after it. */
+    private void onLimit(int scrolled, int limit) {
+        log("Limit reached: " + scrolled + "/" + limit);
+        boolean opened = false;
+        if (Prefs.breakScreen(prefs)) {
+            try {
+                Intent i = new Intent(this, LimitActivity.class);
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(i);
+                opened = true;
+            } catch (Exception e) {
+                log("break screen error: " + e);
+            }
+        }
+        if (!opened) {
+            String msg = scrolled == limit
+                    ? "You just hit your daily limit of " + limit + " reels. Time for a break?"
+                    : scrolled + " reels today. That's " + (scrolled - limit) + " over your limit.";
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+        }
         try {
             Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
             if (v != null) v.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE));
@@ -501,13 +522,19 @@ public class ReelsAccessibilityService extends AccessibilityService {
         int scrolled = d[0];
         int watched = d[1];
         int seconds = d[2] + pendingSeconds;
+        int limit = Prefs.limit(prefs);
+        boolean over = limit > 0 && scrolled >= limit;
+        boolean close = !over && limit > 0 && scrolled >= limit * 0.8f;
+        String reelIcon = over ? "🛑" : close ? "⚠️" : "🎞";
+        String eyeIcon = over ? "😵" : close ? "😬" : "👀";
+        String clockIcon = over ? "⌛" : "⏱";
+        String first = over ? reelIcon + " " + scrolled + " / " + limit + " reels" : reelIcon + " " + scrolled + " reels today";
         if (bubbleExpanded) {
-            bubble.setText("🎞 " + scrolled + " reels today\n👀 " + watched + " watched · ⏱ " + Prefs.time(seconds));
+            bubble.setText(first + "\n" + eyeIcon + " " + watched + " watched · " + clockIcon + " " + Prefs.time(seconds));
         } else {
-            bubble.setText("🎞 " + scrolled);
+            bubble.setText(reelIcon + " " + scrolled);
         }
 
-        int limit = Prefs.limit(prefs);
         int color = 0xE62A292F;                                      // charcoal grey
         if (limit > 0 && scrolled >= limit) color = 0xF08C2341;      // burgundy: over limit
         else if (limit > 0 && scrolled >= limit * 0.8f) color = 0xF0A8823F; // gold: getting close
