@@ -30,12 +30,14 @@ import java.util.Locale;
 /** The app screen: on/off status, today / week / month / all-time stats, charts and settings. */
 public class MainActivity extends Activity {
 
-    private static final int BG = 0xFF0F0F12;
-    private static final int CARD = 0xFF1C1C22;
-    private static final int MUTED = 0xFFA0A0AB;
-    private static final int GREEN = 0xFF4ADE80;
-    private static final int RED = 0xFFF87171;
-    private static final int ACCENT = 0xFFE1306C;
+    // Theme: charcoal grey + burgundy + champagne gold
+    private static final int BG = 0xFF141416;      // charcoal background
+    private static final int CARD = 0xFF232227;    // grey cards
+    private static final int MUTED = 0xFF9E9CA6;   // soft grey text
+    private static final int GREEN = 0xFF8FCB9B;   // sage "ON"
+    private static final int RED = 0xFFE5737F;     // rose warnings
+    private static final int ACCENT = 0xFF8C2341;  // burgundy buttons
+    private static final int GOLD = 0xFFD4AF7A;    // champagne titles
 
     private SharedPreferences prefs;
     private Stats stats;
@@ -293,7 +295,7 @@ public class MainActivity extends Activity {
     }
 
     private TextView label(String s) {
-        TextView t = text(s, 12, ACCENT, true);
+        TextView t = text(s, 12, GOLD, true);
         t.setLetterSpacing(0.08f);
         return t;
     }
@@ -336,7 +338,7 @@ public class MainActivity extends Activity {
         b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
         b.setTextColor(Color.WHITE);
         GradientDrawable g = new GradientDrawable();
-        g.setColor(0xFF2E2E36);
+        g.setColor(0xFF34323A);
         g.setCornerRadius(dp(12));
         b.setBackground(g);
         b.setLayoutParams(new LinearLayout.LayoutParams(dp(56), dp(44)));

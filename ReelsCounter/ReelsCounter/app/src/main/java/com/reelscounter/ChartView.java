@@ -22,10 +22,10 @@ public class ChartView extends View {
 
     public ChartView(Context context) {
         super(context);
-        barPaint.setColor(0xFF8E3A64);
-        todayPaint.setColor(0xFFE1306C);
-        emptyPaint.setColor(0xFF33333B);
-        textPaint.setColor(0xFFA0A0AB);
+        barPaint.setColor(0xFF8C2341);   // burgundy
+        todayPaint.setColor(0xFFD4AF7A); // gold = today
+        emptyPaint.setColor(0xFF38363E);
+        textPaint.setColor(0xFF9E9CA6);
         textPaint.setTextAlign(Paint.Align.CENTER);
         textPaint.setTextSize(px(TypedValue.COMPLEX_UNIT_SP, 11));
     }

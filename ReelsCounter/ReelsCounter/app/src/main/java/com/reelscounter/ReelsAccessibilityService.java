@@ -508,15 +508,15 @@ public class ReelsAccessibilityService extends AccessibilityService {
         }
 
         int limit = Prefs.limit(prefs);
-        int color = 0xD9202024;                                      // dark
-        if (limit > 0 && scrolled >= limit) color = 0xEBC62828;      // red: over limit
-        else if (limit > 0 && scrolled >= limit * 0.8f) color = 0xEBE65100; // orange: close
+        int color = 0xE62A292F;                                      // charcoal grey
+        if (limit > 0 && scrolled >= limit) color = 0xF08C2341;      // burgundy: over limit
+        else if (limit > 0 && scrolled >= limit * 0.8f) color = 0xF0A8823F; // gold: getting close
         if (color != bubbleColor) {
             bubbleColor = color;
             GradientDrawable bg = new GradientDrawable();
             bg.setCornerRadius(dp(18));
             bg.setColor(color);
-            bg.setStroke(dp(1), 0x40FFFFFF);
+            bg.setStroke(dp(2), 0xCCB23A5E); // burgundy outline
             bubble.setBackground(bg);
         }
     }

@@ -12,10 +12,10 @@
         android:pathData="M45,30 H63 A7,7 0 0 1 70,37 V71 A7,7 0 0 1 63,78 H45 A7,7 0 0 1 38,71 V37 A7,7 0 0 1 45,30 Z" />
     <!-- play triangle -->
     <path
-        android:fillColor="#FFFFFF"
+        android:fillColor="#D4AF7A"
         android:pathData="M49,44 L62,54 L49,64 Z" />
     <!-- swipe arrows -->
     <path
-        android:fillColor="#FFFFFF"
+        android:fillColor="#D4AF7A"
         android:pathData="M76,44 L81,38 L86,44 Z M76,64 L81,70 L86,64 Z" />
 </vector>
