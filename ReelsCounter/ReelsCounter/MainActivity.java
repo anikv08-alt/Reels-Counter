@@ -1,11 +1,14 @@
 package com.reelscounter;
 
 import android.app.Activity;
+import android.animation.ValueAnimator;
 import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
+import android.graphics.drawable.RippleDrawable;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -17,6 +20,8 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.DecelerateInterpolator;
+import android.view.animation.OvershootInterpolator;
 import android.widget.Button;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
@@ -46,6 +51,12 @@ public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private Stats stats;
     private LinearLayout content;
+    private ScrollView scroll;
+    private int tab = 0;
+    private boolean firstShow = true;
+    private final ImageView[] navIcons = new ImageView[4];
+    private final TextView[] navLabels = new TextView[4];
+    private final GradientDrawable[] navPills = new GradientDrawable[4];
     private static final int PICK_PHOTOS = 7;
 
     @Override
@@ -54,37 +65,151 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
         stats = Stats.get(this);
         getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
+        getWindow().setNavigationBarColor(0xFF0F0F11);
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFitsSystemWindows(true);
-        scroll.setBackgroundColor(BG);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setFitsSystemWindows(true);
+        root.setBackgroundColor(BG);
+
+        scroll = new ScrollView(this);
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(18), dp(18), dp(18), dp(40));
+        content.setPadding(dp(18), dp(18), dp(18), dp(28));
         scroll.addView(content);
-        setContentView(scroll);
+        root.addView(scroll);
+
+        // ---- bottom tab bar (like Spotify) ----
+        View divider = new View(this);
+        divider.setBackgroundColor(0xFF2A292F);
+        divider.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
+        root.addView(divider);
+        LinearLayout nav = new LinearLayout(this);
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        nav.setBackgroundColor(0xFF0F0F11);
+        nav.setPadding(0, dp(6), 0, dp(8));
+        String[] names = {"Today", "Stats", "Break", "Settings"};
+        int[] icons = {R.drawable.ic_tab_home, R.drawable.ic_tab_stats, R.drawable.ic_tab_break, R.drawable.ic_tab_settings};
+        for (int i = 0; i < 4; i++) nav.addView(navItem(i, names[i], icons[i]));
+        root.addView(nav);
+
+        setContentView(root);
+        if (savedInstanceState != null) tab = savedInstanceState.getInt("tab", 0);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putInt("tab", tab);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        build();
+        showTab(tab, false);
     }
 
-    private void build() {
-        content.removeAllViews();
-        content.addView(text("Reels Counter", 28, Color.WHITE, true));
-        content.addView(text("An honest count of your scrolling.", 14, MUTED, false));
+    @Override
+    public void onBackPressed() {
+        if (tab != 0) showTab(0, true);
+        else super.onBackPressed();
+    }
 
-        // ---- on / off ----
+    // ---------- tabs ----------
+
+    private LinearLayout navItem(int index, String name, int icon) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER_HORIZONTAL);
+        item.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        ImageView iv = new ImageView(this);
+        iv.setImageDrawable(getDrawable(icon));
+        iv.setPadding(dp(16), dp(4), dp(16), dp(4));
+        GradientDrawable pill = new GradientDrawable();
+        pill.setColor(ACCENT);
+        pill.setCornerRadius(dp(16));
+        iv.setBackground(pill);
+        iv.setLayoutParams(new LinearLayout.LayoutParams(dp(60), dp(32)));
+        item.addView(iv);
+
+        TextView label = new TextView(this);
+        label.setText(name);
+        label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        label.setGravity(Gravity.CENTER);
+        label.setPadding(0, dp(4), 0, 0);
+        item.addView(label);
+
+        navIcons[index] = iv;
+        navLabels[index] = label;
+        navPills[index] = pill;
+        item.setOnClickListener(v -> {
+            iv.animate().scaleX(0.8f).scaleY(0.8f).setDuration(90)
+                    .withEndAction(() -> iv.animate().scaleX(1f).scaleY(1f).setDuration(220)
+                            .setInterpolator(new OvershootInterpolator(3f)));
+            if (index != tab) showTab(index, true);
+        });
+        return item;
+    }
+
+    private void showTab(int index, boolean animate) {
+        tab = index;
+        for (int i = 0; i < 4; i++) {
+            boolean selected = i == index;
+            navIcons[i].setColorFilter(selected ? Color.WHITE : MUTED);
+            navLabels[i].setTextColor(selected ? Color.WHITE : MUTED);
+            navLabels[i].setTypeface(selected ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+            navPills[i].setAlpha(selected ? 255 : 0);
+        }
+        content.removeAllViews();
+        if (index == 0) buildToday();
+        else if (index == 1) buildStats();
+        else if (index == 2) buildBreak();
+        else buildSettings();
+        scroll.scrollTo(0, 0);
+        if (animate || firstShow) animateIn();
+        firstShow = false;
+    }
+
+    /** Cards slide up and fade in one after another. */
+    private void animateIn() {
+        for (int i = 0; i < content.getChildCount(); i++) {
+            View v = content.getChildAt(i);
+            v.setAlpha(0f);
+            v.setTranslationY(dp(28));
+            v.animate().alpha(1f).translationY(0f).setStartDelay(i * 70L).setDuration(380)
+                    .setInterpolator(new DecelerateInterpolator(2f));
+        }
+    }
+
+    private void header(String title, String subtitle) {
+        content.addView(text(title, 28, Color.WHITE, true));
+        content.addView(text(subtitle, 14, MUTED, false));
+    }
+
+    /** Counts a number up from 0 for a little "ta-da". */
+    private void countUp(TextView tv, int to) {
+        if (to <= 0) {
+            tv.setText("0");
+            return;
+        }
+        ValueAnimator a = ValueAnimator.ofInt(0, to);
+        a.setDuration(Math.min(1200, 500 + to * 8L));
+        a.setInterpolator(new DecelerateInterpolator(2f));
+        a.addUpdateListener(an -> tv.setText(String.valueOf(an.getAnimatedValue())));
+        a.start();
+    }
+
+    // ---------- Today tab ----------
+
+    private void buildToday() {
+        header("Today", new SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(new java.util.Date()));
+
         boolean on = isServiceOn();
         LinearLayout status = card();
         status.addView(text(on ? "●  Counter is ON" : "●  Counter is OFF", 17, on ? GREEN : RED, true));
-        if (on) {
-            status.addView(text("Open Instagram Reels and the bubble will count every reel. "
-                    + "Drag the bubble to move it. Tap it to make it smaller.", 14, MUTED, false));
-        } else {
+        if (!on) {
             status.addView(text("1. Tap \"Turn on counter\"\n"
                     + "2. Go to Installed apps → Reels Counter\n"
                     + "3. Switch it on and tap Allow\n\n"
@@ -100,17 +225,18 @@ public class MainActivity extends Activity {
         }
         content.addView(status);
 
-        // ---- today ----
         String today = Stats.today();
         int[] t = stats.day(today);
         int limit = Prefs.limit(prefs);
         LinearLayout todayCard = card();
-        todayCard.addView(label("TODAY"));
-        todayCard.addView(text(String.valueOf(t[0]), 54, Color.WHITE, true));
-        todayCard.addView(text("reels scrolled", 14, MUTED, false));
+        todayCard.addView(label("REELS SCROLLED TODAY"));
+        TextView big = text("0", 58, Color.WHITE, true);
+        todayCard.addView(big);
+        countUp(big, t[0]);
         todayCard.addView(grid(t[0], t[1], t[2]));
         if (limit > 0) {
             boolean over = t[0] >= limit;
+            todayCard.addView(progressBar(Math.min(1f, t[0] / (float) limit), over));
             todayCard.addView(text(over
                     ? "You're " + (t[0] - limit) + " over your daily limit of " + limit + "."
                     : (limit - t[0]) + " reels left before your daily limit of " + limit + ".",
@@ -118,7 +244,13 @@ public class MainActivity extends Activity {
         }
         content.addView(todayCard);
 
-        // ---- when do you scroll most ----
+        int[] w = stats.weekComparison();
+        LinearLayout weekMini = card();
+        weekMini.addView(label("THIS WEEK SO FAR"));
+        weekMini.addView(text(w[0] + " reels", 22, Color.WHITE, true));
+        weekMini.addView(text(Prefs.weekDiff(w[0], w[1]), 14, w[0] > w[1] ? RED : w[0] < w[1] ? GREEN : MUTED, false));
+        content.addView(weekMini);
+
         LinearLayout hoursCard = card();
         hoursCard.addView(label("WHEN YOU SCROLL MOST"));
         int[] hours7 = stats.hourly(Stats.daysAgo(6), today);
@@ -126,7 +258,7 @@ public class MainActivity extends Activity {
         int peak7 = Stats.peak(hours7);
         int peakToday = Stats.peak(hoursToday);
         if (peak7 < 0) {
-            hoursCard.addView(text("Not enough data yet. This fills in as you scroll (it started tracking hours with this update).", 14, MUTED, false));
+            hoursCard.addView(text("Not enough data yet. This fills in as you scroll.", 14, MUTED, false));
         } else {
             int total7 = 0;
             for (int v : hours7) total7 += v;
@@ -145,8 +277,41 @@ public class MainActivity extends Activity {
             hoursCard.addView(hourChart);
         }
         content.addView(hoursCard);
+    }
 
-        // ---- last 7 days chart ----
+    /** Thin bar showing how close you are to your limit; fills with an animation. */
+    private View progressBar(float fraction, boolean over) {
+        LinearLayout track = new LinearLayout(this);
+        GradientDrawable trackBg = new GradientDrawable();
+        trackBg.setColor(0xFF34323A);
+        trackBg.setCornerRadius(dp(4));
+        track.setBackground(trackBg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(8));
+        lp.topMargin = dp(12);
+        lp.bottomMargin = dp(6);
+        track.setLayoutParams(lp);
+        View fill = new View(this);
+        GradientDrawable fillBg = new GradientDrawable();
+        fillBg.setColor(over ? ACCENT : GOLD);
+        fillBg.setCornerRadius(dp(4));
+        fill.setBackground(fillBg);
+        fill.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, Math.max(0.001f, fraction)));
+        View rest = new View(this);
+        rest.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, Math.max(0.001f, 1f - fraction)));
+        track.addView(fill);
+        track.addView(rest);
+        fill.setPivotX(0f);
+        fill.setScaleX(0f);
+        fill.animate().scaleX(1f).setStartDelay(250).setDuration(900).setInterpolator(new DecelerateInterpolator(2f));
+        return track;
+    }
+
+    // ---------- Stats tab ----------
+
+    private void buildStats() {
+        header("Your stats", "How your scrolling adds up");
+        String today = Stats.today();
+
         LinearLayout weekChart = card();
         weekChart.addView(label("LAST 7 DAYS"));
         ChartView chart7 = new ChartView(this);
@@ -161,7 +326,6 @@ public class MainActivity extends Activity {
         weekChart.addView(chart7);
         content.addView(weekChart);
 
-        // ---- week / month / all time ----
         LinearLayout weekCard = period("THIS WEEK (MON–SUN)", Stats.weekStart(), today, Stats.dayOfWeek());
         int[] w = stats.weekComparison();
         weekCard.addView(text(Prefs.weekDiff(w[0], w[1]), 14, w[0] > w[1] ? RED : w[0] < w[1] ? GREEN : MUTED, false));
@@ -188,33 +352,27 @@ public class MainActivity extends Activity {
 
         int[] all = stats.sum("0000-00-00", "9999-99-99");
         content.addView(period("ALL TIME", "0000-00-00", "9999-99-99", Math.max(1, all[3])));
+    }
 
-        // ---- settings ----
-        LinearLayout settings = card();
-        settings.addView(label("SETTINGS"));
-        settings.addView(stepper("Count a reel as \"watched\" if I stay on it for at least",
-                "threshold", Prefs.threshold(prefs), 1, 1, 30, " sec"));
-        settings.addView(stepper("Daily limit (bubble turns orange, then red, and your phone buzzes)",
-                "limit", limit, 10, 0, 2000, " reels"));
-        settings.addView(toggle("Show the floating bubble", "bubbleOn", Prefs.bubbleOn(prefs)));
-        settings.addView(toggle("Show the bubble only inside Instagram", "onlyIg", Prefs.onlyInInstagram(prefs)));
-        settings.addView(button("Reset bubble position", v -> {
-            prefs.edit().putLong("resetPosition", System.currentTimeMillis()).apply();
-            Toast.makeText(this, "Bubble moved back to the top left", Toast.LENGTH_SHORT).show();
-        }));
-        content.addView(settings);
+    // ---------- Break tab ----------
 
-        // ---- break screen ----
-        LinearLayout breakCard = card();
-        breakCard.addView(label("BREAK SCREEN"));
-        breakCard.addView(text("When you hit your daily limit, Reels Counter opens over Instagram with your photos, "
+    private void buildBreak() {
+        header("Break screen", "What you see when you hit your limit");
+        int limit = Prefs.limit(prefs);
+
+        LinearLayout about = card();
+        about.addView(text("When you hit your daily limit, Reels Counter opens over Instagram with your photos, "
                 + "a reminder and your week-vs-last-week numbers, and asks if you really want to keep going. "
                 + "It comes back every 10 reels after that.", 14, MUTED, false));
-        if (limit == 0) breakCard.addView(text("Set a daily limit above to turn this on.", 13, GOLD, false));
-        breakCard.addView(toggle("Show the break screen at my limit", "breakScreen", Prefs.breakScreen(prefs)));
+        if (limit == 0) about.addView(text("Set a daily limit in Settings to turn this on.", 13, GOLD, false));
+        about.addView(toggle("Show the break screen at my limit", "breakScreen", Prefs.breakScreen(prefs)));
+        content.addView(about);
+
+        LinearLayout photosCard = card();
+        photosCard.addView(label("YOUR PHOTOS"));
         List<Uri> photos = Images.list(prefs);
-        breakCard.addView(text(photos.isEmpty() ? "No photos yet. Add things you care about: your goals, people, places."
-                : "Your photos (" + photos.size() + ") · tap one to remove it", 13, Color.WHITE, false));
+        photosCard.addView(text(photos.isEmpty() ? "No photos yet. Add things you care about: your goals, people, places."
+                : photos.size() + " of " + Images.MAX + " · tap one to remove it", 13, MUTED, false));
         if (!photos.isEmpty()) {
             HorizontalScrollView strip = new HorizontalScrollView(this);
             strip.setHorizontalScrollBarEnabled(false);
@@ -223,17 +381,55 @@ public class MainActivity extends Activity {
             row.setPadding(0, dp(8), 0, dp(4));
             for (Uri uri : photos) row.addView(thumbnail(uri));
             strip.addView(row);
-            breakCard.addView(strip);
+            photosCard.addView(strip);
         }
-        breakCard.addView(button(photos.size() >= Images.MAX ? "Photo limit reached (" + Images.MAX + ")" : "Add photos", v -> pickPhotos()));
-        breakCard.addView(button("Preview the break screen", v -> {
+        photosCard.addView(button(photos.size() >= Images.MAX ? "Photo limit reached (" + Images.MAX + ")" : "Add photos", v -> pickPhotos()));
+        content.addView(photosCard);
+
+        LinearLayout preview = card();
+        preview.addView(label("TRY IT"));
+        preview.addView(text("See exactly what will pop up, without waiting to hit your limit.", 14, MUTED, false));
+        preview.addView(button("Preview the break screen", v -> {
             Intent i = new Intent(this, LimitActivity.class);
             i.putExtra(LimitActivity.EXTRA_PREVIEW, true);
             startActivity(i);
         }));
-        content.addView(breakCard);
+        content.addView(preview);
+    }
 
-        // ---- help ----
+    // ---------- Settings tab ----------
+
+    private void buildSettings() {
+        header("Settings", "Make the counter work your way");
+
+        LinearLayout counting = card();
+        counting.addView(label("COUNTING"));
+        counting.addView(stepper("Count a reel as \"watched\" if I stay on it for at least",
+                "threshold", Prefs.threshold(prefs), 1, 1, 30, " sec"));
+        counting.addView(stepper("Daily limit (bubble turns gold, then burgundy, and the break screen opens)",
+                "limit", Prefs.limit(prefs), 10, 0, 2000, " reels"));
+        content.addView(counting);
+
+        LinearLayout bubbleCard = card();
+        bubbleCard.addView(label("FLOATING BUBBLE"));
+        bubbleCard.addView(toggle("Show the floating bubble", "bubbleOn", Prefs.bubbleOn(prefs)));
+        bubbleCard.addView(toggle("Show the bubble only inside Instagram", "onlyIg", Prefs.onlyInInstagram(prefs)));
+        bubbleCard.addView(button("Reset bubble position", v -> {
+            prefs.edit().putLong("resetPosition", System.currentTimeMillis()).apply();
+            Toast.makeText(this, "Bubble moved back to the top left", Toast.LENGTH_SHORT).show();
+        }));
+        content.addView(bubbleCard);
+
+        LinearLayout upi = card();
+        upi.addView(label("USING BHIM OR A BANK APP?"));
+        upi.addView(text("Payment apps won't open while the counter is on. Set up a shortcut once: "
+                + "Accessibility → Installed apps → Reels Counter → Reels Counter shortcut. "
+                + "Then hold volume up + down for 3 seconds to switch the counter off before paying, and again to switch it back on.",
+                14, MUTED, false));
+        upi.addView(button("Open accessibility settings", v ->
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))));
+        content.addView(upi);
+
         LinearLayout help = card();
         help.addView(label("HOW IT COUNTS"));
         help.addView(text("• Scrolled: every reel that comes onto your screen in Instagram "
@@ -368,7 +564,7 @@ public class MainActivity extends Activity {
                         getContentResolver().releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     } catch (Exception ignored) {
                     }
-                    build();
+                    showTab(tab, false);
                 })
                 .setNegativeButton("Keep", null)
                 .show());
@@ -403,7 +599,7 @@ public class MainActivity extends Activity {
             addPhoto(list, data.getData());
         }
         Images.save(prefs, list);
-        build();
+        showTab(tab, false);
     }
 
     private void addPhoto(List<Uri> list, Uri uri) {
@@ -465,7 +661,7 @@ public class MainActivity extends Activity {
         GradientDrawable g = new GradientDrawable();
         g.setColor(ACCENT);
         g.setCornerRadius(dp(12));
-        b.setBackground(g);
+        b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x40FFFFFF), g, null));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(10);
@@ -482,7 +678,7 @@ public class MainActivity extends Activity {
         GradientDrawable g = new GradientDrawable();
         g.setColor(0xFF34323A);
         g.setCornerRadius(dp(12));
-        b.setBackground(g);
+        b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x40FFFFFF), g, null));
         b.setLayoutParams(new LinearLayout.LayoutParams(dp(56), dp(44)));
         return b;
     }
