@@ -1,11 +1,13 @@
 package com.reelscounter;
 
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.util.TypedValue;
 import android.view.View;
+import android.view.animation.DecelerateInterpolator;
 
 /** Simple bar chart with one highlighted bar (gold). */
 public class ChartView extends View {
@@ -14,6 +16,7 @@ public class ChartView extends View {
     private String[] labels = new String[0];
     private boolean showValues = true;
     private int highlight = -1;
+    private float progress = 1f;
 
     private final Paint barPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint todayPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -36,7 +39,17 @@ public class ChartView extends View {
         this.values = values;
         this.labels = labels;
         this.showValues = showValues;
-        invalidate();
+        // bars grow up from the bottom
+        ValueAnimator grow = ValueAnimator.ofFloat(0f, 1f);
+        grow.setDuration(900);
+        grow.setStartDelay(200);
+        grow.setInterpolator(new DecelerateInterpolator(2f));
+        grow.addUpdateListener(a -> {
+            progress = (float) a.getAnimatedValue();
+            invalidate();
+        });
+        progress = 0f;
+        grow.start();
     }
 
     @Override
@@ -62,7 +75,7 @@ public class ChartView extends View {
 
         for (int i = 0; i < n; i++) {
             float cx = slot * i + slot / 2f;
-            float barHeight = (bottom - top) * values[i] / (float) max;
+            float barHeight = (bottom - top) * values[i] / (float) max * progress;
             if (values[i] == 0) {
                 rect.set(cx - barWidth / 2f, bottom - px(TypedValue.COMPLEX_UNIT_DIP, 2), cx + barWidth / 2f, bottom);
                 canvas.drawRoundRect(rect, radius, radius, emptyPaint);
@@ -70,7 +83,7 @@ public class ChartView extends View {
                 barHeight = Math.max(barHeight, px(TypedValue.COMPLEX_UNIT_DIP, 3));
                 rect.set(cx - barWidth / 2f, bottom - barHeight, cx + barWidth / 2f, bottom);
                 canvas.drawRoundRect(rect, radius, radius, i == highlight ? todayPaint : barPaint);
-                if (showValues) {
+                if (showValues && progress > 0.95f) {
                     canvas.drawText(String.valueOf(values[i]), cx, bottom - barHeight - px(TypedValue.COMPLEX_UNIT_DIP, 4), textPaint);
                 }
             }
